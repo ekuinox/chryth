@@ -50,8 +50,12 @@ fn main() {
             .expect("Failed to initialize COM.")
     }
 
-    let (buffer, wave_format) =
-        unsafe { capture_audio(duration).expect("Failed to capture audio.") };
+    let (buffer, wave_format) = unsafe {
+        let device = get_device().expect("Failed to get IMMDevice.");
+        let name = get_device_name(&device).unwrap_or_default();
+        log::info!("Device: {name}");
+        capture_audio(&device, duration).expect("Failed to capture audio.")
+    };
 
     let mut output =
         BufWriter::new(File::create(&cli.output).expect("Failed to create output file."));
@@ -79,7 +83,7 @@ fn main() {
     unsafe { CoUninitialize() }
 }
 
-unsafe fn capture_audio(duration: Duration) -> Result<(Vec<u8>, WaveFormatEx)> {
+unsafe fn get_device() -> Result<IMMDevice> {
     let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
         .context("Failed to create device enumerator.")?;
 
@@ -87,9 +91,10 @@ unsafe fn capture_audio(duration: Duration) -> Result<(Vec<u8>, WaveFormatEx)> {
         .GetDefaultAudioEndpoint(eRender, eConsole)
         .context("Failed to get default audio endpoint.")?;
 
-    let name = get_device_name(&device).unwrap_or_default();
-    log::info!("Device: {name}");
+    Ok(device)
+}
 
+unsafe fn capture_audio(device: &IMMDevice, duration: Duration) -> Result<(Vec<u8>, WaveFormatEx)> {
     let audio_client: IAudioClient = device
         .Activate(CLSCTX_ALL, None)
         .context("Failed to activate audio client.")?;
